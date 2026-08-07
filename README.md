@@ -216,3 +216,150 @@ Open `http://localhost:5173` in your browser.
 ├── compose.yaml                 # Multi-container Docker Compose definition
 └── README.md
 ```
+
+
+---
+
+# 🏗️ System Architecture
+
+The ReachX Email Scheduler follows an asynchronous microservice-inspired architecture. The frontend communicates with a REST API secured using JWT authentication. Email scheduling requests are persisted in PostgreSQL and processed asynchronously using Redis and BullMQ workers, ensuring scalable and rate-limited email delivery.
+
+```text
+                                   ReachX Email Scheduler
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+                                    ┌───────────────────────┐
+                                    │       End User        │
+                                    └───────────┬───────────┘
+                                                │
+                                                │ HTTP / HTTPS
+                                                ▼
+                             ┌────────────────────────────────────┐
+                             │ React Frontend (Vite + TypeScript) │
+                             │  • Dashboard                       │
+                             │  • CSV Upload                      │
+                             │  • Scheduling UI                   │
+                             └──────────────┬─────────────────────┘
+                                            │
+                                  REST API + JWT
+                                            │
+                                            ▼
+                   ┌────────────────────────────────────────────────────┐
+                   │          Express.js Backend API                    │
+                   │                                                    │
+                   │ • Google OAuth Authentication                      │
+                   │ • JWT Authorization                                │
+                   │ • Sender Management                                │
+                   │ • Email Scheduling API                             │
+                   │ • Dashboard APIs                                   │
+                   └───────────────┬───────────────────────┬────────────┘
+                                   │                       │
+                      Database      │                       │ Queue Jobs
+                                   ▼                       ▼
+                     ┌────────────────────┐      ┌─────────────────────┐
+                     │ PostgreSQL         │      │ Redis + BullMQ      │
+                     │                    │      │                     │
+                     │ • Users            │      │ • Job Queue         │
+                     │ • Senders          │      │ • Retry Logic       │
+                     │ • Email Jobs       │      │ • Delayed Jobs      │
+                     └─────────┬──────────┘      └─────────┬───────────┘
+                               │                           │
+                               │                           ▼
+                               │            ┌──────────────────────────┐
+                               │            │     Email Worker          │
+                               │            │                          │
+                               │            │ • Queue Consumer         │
+                               │            │ • Rate Limiter           │
+                               │            │ • Sender Rotation        │
+                               │            │ • Email Processing       │
+                               │            └──────────┬───────────────┘
+                               │                       │
+                               │                       ▼
+                               │          ┌──────────────────────────┐
+                               │          │ SMTP Provider            │
+                               │          │ (Gmail / Ethereal)       │
+                               │          └──────────┬───────────────┘
+                               │                     │
+                               ▼                     ▼
+                      Job Status Updated      Recipient Inbox
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+```
+
+## Request Flow
+
+```text
+User Login
+      │
+      ▼
+Google OAuth
+      │
+      ▼
+JWT Token Issued
+      │
+      ▼
+Frontend Stores JWT
+      │
+      ▼
+Authenticated API Requests
+      │
+      ▼
+Express Backend
+      │
+      ▼
+Prisma ORM
+      │
+      ▼
+PostgreSQL
+```
+
+---
+
+## Email Scheduling Flow
+
+```text
+Upload CSV
+      │
+      ▼
+Schedule Email
+      │
+      ▼
+Validate Request
+      │
+      ▼
+Save Email Job
+      │
+      ▼
+Push Job to BullMQ
+      │
+      ▼
+Redis Queue
+      │
+      ▼
+Email Worker
+      │
+      ▼
+Rate Limiter
+      │
+      ▼
+SMTP Provider
+      │
+      ▼
+Recipient
+      │
+      ▼
+Update Job Status
+```
+
+---
+
+## Architecture Highlights
+
+- **React + TypeScript** provides a responsive and type-safe frontend.
+- **Express.js** exposes REST APIs for authentication, sender management, and email scheduling.
+- **Google OAuth + JWT** secures user authentication and API access.
+- **Prisma ORM** manages communication with PostgreSQL.
+- **Redis + BullMQ** enable asynchronous background job processing.
+- **Dedicated Worker Service** processes queued emails independently from API requests.
+- **Rate Limiting** prevents SMTP throttling and controls email throughput.
+- **Docker Compose** orchestrates the frontend, backend, PostgreSQL, and Redis services for consistent local development and deployment.
