@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmailStatus {
+  SCHEDULED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  googleId  String?  @unique
+  passwordHash String?
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  senders   Sender[]
+  emails    EmailJob[]
+}
+
+model Sender {
+  id          String   @id @default(cuid())
+  userId      String
+  email       String
+  name        String?
+  appPassword String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails      EmailJob[]
+
+  @@unique([userId, email])
+}
+
+model EmailJob {
+  id             String      @id @default(cuid())
+  userId         String
+  senderId       String
+  recipient      String
+  subject        String
+  body           String
+  scheduledAt    DateTime
+  status         EmailStatus @default(SCHEDULED)
+  idempotencyKey String      @unique
+  queueJobId     String?     @unique
+  sentAt         DateTime?
+  failedAt       DateTime?
+  failureReason  String?
+  previewUrl     String?
+  attempts       Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender         Sender      @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  attachments    Attachment[]
+
+  @@index([userId, status, scheduledAt])
+  @@index([senderId, scheduledAt])
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  emailJobId String
+  filename   String
+  content    Bytes
+  mimeType   String
+  size       Int
+  emailJob   EmailJob @relation(fields: [emailJobId], references: [id], onDelete: Cascade)
+
+  @@index([emailJobId])
+}

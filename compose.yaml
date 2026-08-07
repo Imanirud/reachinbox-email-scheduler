@@ -1,0 +1,75 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://reachx:reachx_dev_password@postgres:5432/reachx?schema=public
+      JWT_SECRET: supersecret
+      SESSION_SECRET: reachinbox
+      WORKER_CONCURRENCY: 5
+      MAX_EMAILS_PER_HOUR: 200
+      DEFAULT_DELAY_SECONDS: 2
+      FRONTEND_URL: http://localhost:5173
+      GOOGLE_CLIENT_ID: 689658756538-436j2u3enioggb5nvrsboar44f91i86s.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: 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
+      GOOGLE_CALLBACK: http://localhost:5173/api/auth/google/callback
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_SECURE: "false"
+      SMTP_USER: kulkarnianni8@gmail.com
+      SMTP_PASS: vwsogqclcbaygrcf
+      SMTP_FROM: "ReachX <kulkarnianni8@gmail.com>"
+    command: sh -c "npx prisma db push && node dist/server.js"
+    ports:
+      - "5000:5000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: reachx
+      POSTGRES_USER: reachx
+      POSTGRES_PASSWORD: reachx_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reachx -d reachx"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
